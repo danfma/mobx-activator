@@ -1,2 +1,2 @@
-# mobx-activator
-A TypeScript transformer for using Mobx 6+ without decorators.
+# reflection-info-ts-transform
+Typescript compiler transformer to add reflection information to our types.
