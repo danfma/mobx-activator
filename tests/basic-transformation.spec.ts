@@ -1,4 +1,4 @@
-import { isObservable, isObservableProp, isAction } from "mobx"
+import { isObservable, isObservableProp, isAction, isComputed, isComputedProp } from "mobx"
 import { reactive } from "../src"
 
 test('it should transform a simple type without a constructor', () => {
@@ -25,6 +25,25 @@ test('it should transform a simple type with a constructor', () => {
 
   expect(isObservable(thing)).toBeTruthy()
   expect(isObservableProp(thing, 'name')).toBeTruthy()
+})
+
+test('it should enhance computed properties', () => {
+  @reactive
+  class Thing {
+    constructor(public name: string = '') {
+
+    }
+
+    get length() {
+      return this.name.length
+    }
+  }
+
+  const thing = new Thing();
+
+  expect(isObservable(thing)).toBeTruthy()
+  expect(isObservableProp(thing, 'name')).toBeTruthy()
+  expect(isComputedProp(thing, 'length')).toBeTruthy()
 })
 
 test('it should ignore a property anotated with null', () => {
