@@ -1,5 +1,5 @@
 import { isObservable, isObservableProp, isAction } from "mobx"
-import { reactive } from "../src/decorator"
+import { reactive } from "../src"
 
 test('it should transform a simple type without a constructor', () => {
   @reactive
