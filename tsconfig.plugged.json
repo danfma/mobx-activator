@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "enhanced",
+    "plugins": [
+      { "transform": "./lib/transformers/ts-transformer" }
+    ]
+  }
+}

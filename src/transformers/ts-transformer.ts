@@ -30,7 +30,18 @@ import {
   isConstructorDeclaration,
   isGetAccessorDeclaration,
   isMethodDeclaration,
-  Expression
+  Expression,
+  createConstructor,
+  createBlock,
+  createLiteral,
+  createExpressionStatement,
+  createPropertyAccess,
+  createIdentifier,
+  createThis,
+  ObjectLiteralExpression,
+  createVoidZero,
+  updateConstructor,
+  updateBlock
 } from 'typescript';
 
 export function transform(): TransformerFactory<SourceFile> {
@@ -130,60 +141,107 @@ export function transform(): TransformerFactory<SourceFile> {
         if (isClassDeclaration(classNode) && isReactive(classNode)) {
           const reflectionInfo = buildReflectionInfo(classNode);
 
+          let reactiveDecorator: Decorator | undefined;
+          let enhancementConfig: Expression | undefined;
+          let userEnhancements: Expression[] = [];
+
           const decorators = classNode.decorators?.map(decorator => {
             if (!isReactiveDecorator(decorator)) {
               return decorator;
             }
 
-            const reflectionInfoExpression = createObjectLiteral([
-              createPropertyAssignment('properties', createArrayLiteral(
-                reflectionInfo.properties.map(property => createObjectLiteral([
-                  createPropertyAssignment('name', createStringLiteral(property.name)),
-                  createPropertyAssignment('optional', property.optional ? createTrue() : createFalse()),
-                  createPropertyAssignment('static', property.static ? createTrue() : createFalse()),
-                  createPropertyAssignment('declaredInConstructor', property.declaredInConstructor ? createTrue() : createFalse()),
-                ]))
-              )),
-              createPropertyAssignment('getters', createArrayLiteral(
-                reflectionInfo.getters.map(getter => createObjectLiteral([
-                  createPropertyAssignment('name', createStringLiteral(getter.name)),
-                  createPropertyAssignment('static', getter.static ? createTrue() : createFalse())
-                ]))
-              )),
-              createPropertyAssignment('methods', createArrayLiteral(
-                reflectionInfo.methods.map(method => createObjectLiteral([
-                  createPropertyAssignment('name', createStringLiteral(method.name)),
-                  createPropertyAssignment('static', method.static ? createTrue() : createFalse())
-                ]))
-              ))
+            reactiveDecorator = decorator;
+
+            enhancementConfig = createArrayLiteral([
+              createArrayLiteral(
+                reflectionInfo.properties
+                  .filter(property => !property.static)
+                  .map(property => createStringLiteral(property.name))
+              ),
+              createArrayLiteral(
+                reflectionInfo.getters
+                  .filter(accessor => !accessor.static)
+                  .map(getter => createStringLiteral(getter.name))
+              ),
+              createArrayLiteral(
+                reflectionInfo.methods
+                  .filter(method => !method.static)
+                  .map(method => createStringLiteral(method.name))
+              )
             ]);
 
-            if (!isCallExpression(decorator.expression)) {
-              return updateDecorator(decorator, createCall(
-                decorator.expression,
-                undefined,
-                [reflectionInfoExpression]
-              ));
+            if (isCallExpression(decorator.expression)) {
+              userEnhancements = decorator.expression.arguments.slice();
             }
 
-            const callExpression = decorator.expression;
+            return null;
+          });
 
-            return updateDecorator(decorator, updateCall(
-              callExpression,
-              callExpression.expression,
+          let classMembers = classNode.members.slice();
+          let constructor = classNode.members.find(x => isConstructorDeclaration(x)) as ConstructorDeclaration | undefined;
+
+          const reactiveEnhanceCallStatement = createExpressionStatement(
+            createCall(
+              createPropertyAccess(
+                isCallExpression(reactiveDecorator?.expression!)
+                  ? reactiveDecorator?.expression.expression!
+                  : reactiveDecorator?.expression!,
+                createIdentifier('enhance')
+              ),
               undefined,
-              [reflectionInfoExpression, ...callExpression.arguments]
-            ));
-          })
+              [
+                classNode.name!,
+                createThis(),
+                enhancementConfig ?? createVoidZero(),
+                ...userEnhancements
+              ]
+            )
+          );
+
+          if (!constructor) {
+            constructor = createConstructor(
+              undefined,
+              undefined,
+              [],
+              createBlock([
+                reactiveEnhanceCallStatement
+              ])
+            );
+
+            classMembers.unshift(constructor);
+          } else {
+            const newConstructor = updateConstructor(
+              constructor,
+              constructor.decorators,
+              constructor.modifiers,
+              constructor.parameters,
+              constructor.body
+                ? updateBlock(constructor.body, [
+                  ...constructor.body?.statements,
+                  reactiveEnhanceCallStatement
+                ])
+                : createBlock([
+                  reactiveEnhanceCallStatement
+                ])
+            );
+
+            classMembers = classMembers.map(member => isConstructorDeclaration(member) ? newConstructor : member);
+          }
+
+          let newDecorators: Decorator[] | undefined = decorators?.filter(x => x) as Decorator[];
+
+          if (newDecorators.length === 0) {
+            newDecorators = undefined;
+          }
 
           const newClassDeclaration = updateClassDeclaration(
             classNode,
-            decorators,
+            newDecorators,
             classNode.modifiers,
             classNode.name,
             classNode.typeParameters,
             classNode.heritageClauses,
-            classNode.members
+            classMembers
           );
 
           return newClassDeclaration;

@@ -1,15 +1,6 @@
-import 'reflect-metadata';
 import { makeObservable, observable, computed, action } from 'mobx';
-import type { ReflectionInfo } from './interfaces';
-import type { AnnotationMapEntry } from 'mobx/dist/internal';
-
-function isReflectionInfo(something: any): something is ReflectionInfo<any> {
-  return (
-    'properties' in something && Array.isArray(something.properties) &&
-    'getters' in something && Array.isArray(something.getters) &&
-    'methods' in something && Array.isArray(something.methods)
-  );
-}
+import type { ReflectionInfo, Type } from './interfaces';
+import { AnnotationMapEntry, objectPrototype } from 'mobx/dist/internal';
 
 export function reactive(
   reflectionInfo: ReflectionInfo<any>,
@@ -26,69 +17,68 @@ export function reactive(
   target: any
 ): any;
 
-export function reactive(
-  targetOrReflectionInfo?: any,
-  overrides: Partial<Record<string, AnnotationMapEntry | null>> = {}, 
-  config: { autoBind?: boolean } = { autoBind: true }
-): any {
+export function reactive(): any {
+  throw new Error('This type should be enhanced at compile time. Did you forget to apply the transformer?');
+}
 
-  const decorator = (type: any) => {
-    // TODO get from other place
-    const { autoBind = true } = config;
-    const annotationsMap: Partial<Record<string, AnnotationMapEntry>> = {};
-    const reflectionInfo: ReflectionInfo<any> = targetOrReflectionInfo;
+type Members = [
+  /* properties */ Array<string>,
+  /* accessors */ Array<string>,
+  /* methods */ Array<string>
+];
 
-    reflectionInfo?.properties
-      .filter(x => !x.static)
-      .map(x => x.name)
-      .forEach(propertyName => {
-        annotationsMap[propertyName as string] = observable;
-      });
+type AutoFactory<T> = (target: T) => void;
 
-    reflectionInfo?.getters
-      .filter(x => !x.static)
-      .map(x => x.name)
-      .forEach(accessorName => {
-        annotationsMap[accessorName as string] = computed;
-      });
+const autoFactoryMap = new Map<Type<any>, AutoFactory<any>>();
 
+reactive.autoBind = false;
 
-    reflectionInfo?.methods
-      .filter(x => !x.static)
-      .map(x => x.name)
-      .forEach(methodName => {
-        annotationsMap[methodName as string] = autoBind ? action.bound : action;
-      });
+reactive.enhance = function enhance<T>(
+  type: Type<T>,
+  target: T,
+  members: Members,
+  overrides: Partial<Record<keyof T, AnnotationMapEntry | null>> = {}) {
 
-    Object.assign(annotationsMap, overrides);
+  let autoFactory = autoFactoryMap.get(type) as AutoFactory<T> | undefined;
 
-    for (const key of Object.keys(annotationsMap)) {
-      if (annotationsMap[key] === null) {
-        delete annotationsMap[key];
-      }
-    }
-
-    reflectionInfo?.properties.forEach(property => {
-      const isDefinedProperty = property.name in type.prototype;
-
-      if (!isDefinedProperty) {
-        type.prototype[property.name] = undefined;
-      }
-    });
-
-    return class ReactiveModel extends type {
-      constructor(...args: any[]) {
-        super(args);
-        makeObservable(this, annotationsMap as any);
-      }
-    }
-  };
-
-  if (isReflectionInfo(targetOrReflectionInfo)) {
-    return decorator;
+  if (autoFactory) {
+    autoFactory(target);
+    return;
   }
 
-  console.log('RECEIVED', arguments);
+  const autoBind = reactive.autoBind;
+  const annotationsMap: Partial<Record<keyof T, AnnotationMapEntry>> = {};
+  const [properties, accessors, methods] = members;
 
-  throw new Error('This type should be enhanced at compile time');
+  for (const property of properties) {
+    annotationsMap[property as keyof T] = observable;
+  }
+
+  for (const accessor of accessors) {
+    annotationsMap[accessor as keyof T] = computed;
+  }
+
+  for (const method of methods) {
+    annotationsMap[method as keyof T] = autoBind ? action.bound : action;
+  }
+
+  Object.assign(annotationsMap, overrides);
+
+  Object.keys(annotationsMap).forEach(property => {
+    if (!annotationsMap[property as keyof T]) {
+      delete annotationsMap[property as keyof T]
+    }
+
+    const isDefinedProperty = property in target;
+
+    if (!isDefinedProperty) {
+      type.prototype[property] = undefined;
+    }
+  });
+
+  autoFactory = (target) => {
+    makeObservable(target, annotationsMap);
+  };
+
+  autoFactory(target);
 }
