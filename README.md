@@ -1,6 +1,6 @@
 # mobx-activator
 
-Typescript compiler transformer to add reflection information to our types.
+Typescript compiler transformer to enhance your types automatically when using the new Mobx 6.
 
 ## Dependencies
 
