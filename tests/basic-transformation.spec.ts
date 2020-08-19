@@ -92,7 +92,7 @@ test('it should not auto bind an action method unless configured', () => {
 })
 
 test('it should auto bind an action method when configured', () => {
-  reactive.autoBind = true;
+  reactive.options.autoBind = true;
 
   @reactive
   class Thing {
@@ -143,4 +143,24 @@ test('it should allow to enhance types with inheritance', () => {
   expect(isObservableProp(point, 'y')).toBeTruthy()
   expect(isObservableProp(point, 'z')).toBeTruthy()
   expect(point).toEqual({ x: 0, y: 0, z: 0 });
+})
+
+test('it should decorate readonly fields with observable.ref', () => {
+  interface MyObject {
+    name: string;
+  }
+
+  @reactive
+  class Container {
+    constructor(readonly obj: MyObject) {
+
+    }
+  }
+  const container = new Container({
+    name: 'Daniel'
+  });
+
+  expect(isObservable(container)).toBeTruthy()
+  expect(isObservableProp(container, 'obj')).toBeTruthy()
+  expect(isObservable(container.obj)).toBeFalsy()
 })

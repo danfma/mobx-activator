@@ -84,7 +84,8 @@ export function transform(): TransformerFactory<SourceFile> {
             name: (property.name as Identifier).escapedText.toString(),
             optional: !!property.questionToken,
             static: hasStaticModifier(property.modifiers),
-            declaredInConstructor: false
+            declaredInConstructor: false,
+            readOnly: property.modifiers?.some(x => x.kind === SyntaxKind.ReadonlyKeyword)
           };
         });
 
@@ -99,7 +100,8 @@ export function transform(): TransformerFactory<SourceFile> {
               name: (parameter.name as Identifier).escapedText.toString(),
               optional: !!parameter.questionToken,
               static: hasStaticModifier(parameter.modifiers),
-              declaredInConstructor: true
+              declaredInConstructor: true,
+              readOnly: parameter.modifiers?.some(x => x.kind === SyntaxKind.ReadonlyKeyword)
             };
           });
 
@@ -156,7 +158,10 @@ export function transform(): TransformerFactory<SourceFile> {
               createArrayLiteral(
                 reflectionInfo.properties
                   .filter(property => !property.static)
-                  .map(property => createStringLiteral(property.name))
+                  .map(property => createArrayLiteral([
+                    createStringLiteral(property.name),
+                    property.readOnly ? createTrue() : createFalse()
+                  ]))
               ),
               createArrayLiteral(
                 reflectionInfo.getters

@@ -1,12 +1,6 @@
 import { makeObservable, observable, computed, action } from 'mobx';
-import type { ReflectionInfo, Type } from './interfaces';
-import { AnnotationMapEntry, objectPrototype } from 'mobx/dist/internal';
-
-export function reactive(
-  reflectionInfo: ReflectionInfo<any>,
-  overrides: Partial<Record<string, AnnotationMapEntry | null>>,
-  config?: { autoBind?: boolean }
-): (target: any) => any;
+import type { Type, AutoFactory, Members } from './interfaces';
+import { AnnotationMapEntry } from 'mobx/dist/internal';
 
 export function reactive(
   overrides: Partial<Record<string, AnnotationMapEntry | null>>,
@@ -21,17 +15,12 @@ export function reactive(): any {
   throw new Error('This type should be enhanced at compile time. Did you forget to apply the transformer?');
 }
 
-type Members = [
-  /* properties */ Array<string>,
-  /* accessors */ Array<string>,
-  /* methods */ Array<string>
-];
-
-type AutoFactory<T> = (target: T) => void;
-
 const autoFactoryMap = new Map<Type<any>, AutoFactory<any>>();
 
-reactive.autoBind = false;
+reactive.options = {
+  autoBind: false,
+  readOnlyAsObservableRef: observable.ref
+};
 
 reactive.enhance = function enhance<T>(
   type: Type<T>,
@@ -46,12 +35,12 @@ reactive.enhance = function enhance<T>(
     return;
   }
 
-  const autoBind = reactive.autoBind;
+  const { autoBind, readOnlyAsObservableRef } = reactive.options;
   const annotationsMap: Partial<Record<keyof T, AnnotationMapEntry>> = {};
   const [properties, accessors, methods] = members;
 
-  for (const property of properties) {
-    annotationsMap[property as keyof T] = observable;
+  for (const [name, readOnly] of properties) {
+    annotationsMap[name as keyof T] = readOnly && readOnlyAsObservableRef ? observable.ref : observable;
   }
 
   for (const accessor of accessors) {

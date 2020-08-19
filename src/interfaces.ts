@@ -8,25 +8,15 @@ export type TypeWithConstructor<T> = {
   prototype: any;
 };
 
-export interface PropertyInfo<T> {
-  name: keyof T;
-  static: boolean;
-  optional: boolean;
-  declaredInConstructor: boolean;
-}
+export type PropertyInfo = [
+  /* name */ string,
+  /* readOnly */ boolean
+];
 
-export interface AccessInfo<T> {
-  name: keyof T;
-  static: boolean;
-}
+export type Members = [
+  /* properties */ Array<PropertyInfo>,
+  /* accessors */ Array<string>,
+  /* methods */ Array<string>
+];
 
-export interface MethodInfo<T> {
-  name: keyof T;
-  static: boolean;
-}
-
-export interface ReflectionInfo<T> {
-  properties: PropertyInfo<T>[];
-  getters: AccessInfo<T>[];
-  methods: MethodInfo<T>[];
-}
+export type AutoFactory<T> = (target: T) => void;
