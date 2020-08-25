@@ -19,7 +19,7 @@ const autoFactoryMap = new Map<Type<any>, AutoFactory<any>>();
 
 reactive.options = {
   autoBind: false,
-  readOnlyAsObservableRef: observable.ref
+  readOnlyAsObservableRef: true
 };
 
 reactive.enhance = function enhance<T>(
