@@ -1,13 +1,12 @@
 {
   "name": "mobx-activator",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "license": "MIT",
   "scripts": {
     "build": "yarn tsc -p tsconfig.build.json",
-    "test": "yarn jest",
-    "publish-ci": "yarn publish"
+    "test": "yarn jest"
   },
   "peerDependencies": {
     "mobx": "^6.0.0-rc.7",
