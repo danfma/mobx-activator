@@ -22,7 +22,7 @@ reactive.options = {
   readOnlyAsObservableRef: true
 };
 
-reactive.enhance = function enhance<T>(
+reactive.enhance = function enhance<T extends object>(
   type: Type<T>,
   target: T,
   members: Members,
