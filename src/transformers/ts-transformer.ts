@@ -14,7 +14,6 @@ import {
   visitNode,
   isClassDeclaration,
   AccessorDeclaration,
-  factory,
   isCallExpression,
   isIdentifier,
   isPropertyDeclaration,
@@ -23,117 +22,152 @@ import {
   isMethodDeclaration,
   isTypeNode,
   Expression
-} from 'typescript';
+} from 'typescript'
 
 export function transform(): TransformerFactory<SourceFile> {
+  return context => {
+    const { factory } = context
+    const knownTypes = new Map<string, ClassDeclaration>()
 
-  const isReactiveDecorator =
-    (decorator: Decorator): boolean => {
-      const expression = decorator.expression;
+    const isReactiveDecorator =
+      (decorator: Decorator): boolean => {
+        const expression = decorator.expression
 
-      return (
-        (isIdentifier(expression) && expression.escapedText === 'reactive') ||
-        (isCallExpression(expression) && isIdentifier(expression.expression) && expression.expression.escapedText === 'reactive')
-      );
-    };
-
-  const getReactiveDecorator =
-    (node: ClassDeclaration): Decorator | undefined => {
-      if (!node.decorators) {
-        return undefined;
+        return (
+          (isIdentifier(expression) && expression.escapedText === 'reactive') ||
+          (isCallExpression(expression) && isIdentifier(expression.expression) && expression.expression.escapedText === 'reactive')
+        )
       }
 
-      return node.decorators?.find(isReactiveDecorator);
-    };
+    const getReactiveDecorator =
+      (node: ClassDeclaration): Decorator | undefined => {
+        if (!node.decorators) {
+          return undefined
+        }
 
-  const isReactive =
-    (node: ClassDeclaration): boolean => !!getReactiveDecorator(node);
+        return node.decorators?.find(isReactiveDecorator)
+      }
 
-  const hasStaticModifier =
-    (modifiers?: ModifiersArray): boolean => {
-      return modifiers?.some(modifier => modifier.kind === SyntaxKind.StaticKeyword) ?? false;
+    const isReactive =
+      (node: ClassDeclaration): boolean => !!getReactiveDecorator(node)
+
+    const hasStaticModifier =
+      (modifiers?: ModifiersArray): boolean => {
+        return modifiers?.some(modifier => modifier.kind === SyntaxKind.StaticKeyword) ?? false
+      }
+
+    const buildReflectionInfo =
+      (node: ClassDeclaration) => {
+        const properties = node.members
+          .filter(member => isPropertyDeclaration(member))
+          .map(member => {
+            const property = member as PropertyDeclaration
+
+            return {
+              name: (property.name as Identifier).escapedText.toString(),
+              optional: !!property.questionToken,
+              static: hasStaticModifier(property.modifiers),
+              declaredInConstructor: false,
+              readOnly: property.modifiers?.some(x => x.kind === SyntaxKind.ReadonlyKeyword)
+            }
+          })
+
+        const constructor = node.members
+          .find(x => isConstructorDeclaration(x)) as ConstructorDeclaration | undefined
+
+        if (constructor) {
+          const membersInConstructor = constructor.parameters
+            .filter(parameter => (parameter.modifiers?.length ?? 0) > 0)
+            .map(parameter => {
+              return {
+                name: (parameter.name as Identifier).escapedText.toString(),
+                optional: !!parameter.questionToken,
+                static: hasStaticModifier(parameter.modifiers),
+                declaredInConstructor: true,
+                readOnly: parameter.modifiers?.some(x => x.kind === SyntaxKind.ReadonlyKeyword)
+              }
+            })
+
+          properties.unshift(...membersInConstructor)
+        }
+
+        const getters = node.members
+          .filter(member => isGetAccessorDeclaration(member))
+          .map(member => {
+            const getter = member as AccessorDeclaration
+
+            return {
+              name: (getter.name as Identifier).escapedText.toString(),
+              static: hasStaticModifier(getter.modifiers)
+            }
+          })
+
+        const methods = node.members
+          .filter(member => isMethodDeclaration(member))
+          .map(member => {
+            const method = member as MethodDeclaration
+
+            return {
+              name: (method.name as Identifier).escapedText.toString(),
+              static: hasStaticModifier(method.modifiers)
+            }
+          })
+
+        return {
+          properties,
+          getters,
+          methods
+        }
+      }
+
+    const getBaseClassName = (classDeclaration: ClassDeclaration): string | undefined => {
+      return classDeclaration.name?.escapedText?.toString()
     }
 
-  const buildReflectionInfo =
-    (node: ClassDeclaration) => {
-      const properties = node.members
-        .filter(member => isPropertyDeclaration(member))
-        .map(member => {
-          const property = member as PropertyDeclaration;
+    const getBaseClassDeclaration = (classDeclaration: ClassDeclaration): ClassDeclaration | undefined => {
+      const extendsNode = classDeclaration.heritageClauses?.find(node => node.token === SyntaxKind.ExtendsKeyword)
+      const maybeIdentifier = extendsNode?.types?.[0]?.expression
+      const baseTypeName = maybeIdentifier && isIdentifier(maybeIdentifier) ? String(maybeIdentifier.escapedText) : undefined
 
-          return {
-            name: (property.name as Identifier).escapedText.toString(),
-            optional: !!property.questionToken,
-            static: hasStaticModifier(property.modifiers),
-            declaredInConstructor: false,
-            readOnly: property.modifiers?.some(x => x.kind === SyntaxKind.ReadonlyKeyword)
-          };
-        });
+      return baseTypeName ? knownTypes.get(baseTypeName) : undefined
+    }
 
-      const constructor = node.members
-        .find(x => isConstructorDeclaration(x)) as ConstructorDeclaration | undefined;
+    const getConstructor = (classDeclaration: ClassDeclaration, immediateOnly = false): ConstructorDeclaration | undefined => {
+      const foundConstructor = classDeclaration.members.find(x => isConstructorDeclaration(x)) as ConstructorDeclaration | undefined
 
-      if (constructor) {
-        const membersInConstructor = constructor.parameters
-          .filter(parameter => (parameter.modifiers?.length ?? 0) > 0)
-          .map(parameter => {
-            return {
-              name: (parameter.name as Identifier).escapedText.toString(),
-              optional: !!parameter.questionToken,
-              static: hasStaticModifier(parameter.modifiers),
-              declaredInConstructor: true,
-              readOnly: parameter.modifiers?.some(x => x.kind === SyntaxKind.ReadonlyKeyword)
-            };
-          });
-
-        properties.unshift(...membersInConstructor);
+      if (immediateOnly) {
+        return foundConstructor
       }
 
-      const getters = node.members
-        .filter(member => isGetAccessorDeclaration(member))
-        .map(member => {
-          const getter = member as AccessorDeclaration;
+      const baseClass = getBaseClassDeclaration(classDeclaration)
 
-          return {
-            name: (getter.name as Identifier).escapedText.toString(),
-            static: hasStaticModifier(getter.modifiers)
-          };
-        });
+      return (
+        foundConstructor ?? 
+        (baseClass ? getConstructor(baseClass) : undefined)
+      )
+    }
 
-      const methods = node.members
-        .filter(member => isMethodDeclaration(member))
-        .map(member => {
-          const method = member as MethodDeclaration;
-
-          return {
-            name: (method.name as Identifier).escapedText.toString(),
-            static: hasStaticModifier(method.modifiers)
-          };
-        });
-
-      return {
-        properties,
-        getters,
-        methods
-      };
-    };
-
-  return context => {
     return node => {
       const visitor: Visitor = classNode => {
         if (isClassDeclaration(classNode) && isReactive(classNode)) {
-          const reflectionInfo = buildReflectionInfo(classNode);
+          const className = getBaseClassName(classNode)
 
-          let reactiveDecorator: Decorator | undefined;
-          let enhancementConfig: Expression | undefined;
-          let userEnhancements: Expression[] = [];
+          if (className) {
+            knownTypes.set(className, classNode)
+          }
+
+          const reflectionInfo = buildReflectionInfo(classNode)
+
+          let reactiveDecorator: Decorator | undefined
+          let enhancementConfig: Expression | undefined
+          let userEnhancements: Expression[] = []
 
           const decorators = classNode.decorators?.map(decorator => {
             if (!isReactiveDecorator(decorator)) {
-              return decorator;
+              return decorator
             }
 
-            reactiveDecorator = decorator;
+            reactiveDecorator = decorator
 
             enhancementConfig = factory.createArrayLiteralExpression([
               factory.createArrayLiteralExpression(
@@ -154,17 +188,17 @@ export function transform(): TransformerFactory<SourceFile> {
                   .filter(method => !method.static)
                   .map(method => factory.createStringLiteral(method.name))
               )
-            ]);
+            ])
 
             if (isCallExpression(decorator.expression)) {
-              userEnhancements = decorator.expression.arguments.slice();
+              userEnhancements = decorator.expression.arguments.slice()
             }
 
-            return null;
-          });
+            return null
+          })
 
-          let classMembers = classNode.members.slice();
-          let constructor = classNode.members.find(x => isConstructorDeclaration(x)) as ConstructorDeclaration | undefined;
+          let classMembers = classNode.members.slice()
+          let constructor = getConstructor(classNode, true)
 
           const reactiveEnhanceCallStatement = factory.createExpressionStatement(
             factory.createCallExpression(
@@ -182,19 +216,75 @@ export function transform(): TransformerFactory<SourceFile> {
                 ...userEnhancements
               ]
             )
-          );
+          )
+
+          const baseClassDeclaration = getBaseClassDeclaration(classNode)
 
           if (!constructor) {
-            constructor = factory.createConstructorDeclaration(
-              undefined,
-              undefined,
-              [],
-              factory.createBlock([
-                reactiveEnhanceCallStatement
-              ])
-            );
+            if (baseClassDeclaration) {
+              const baseConstructor = getConstructor(baseClassDeclaration)
 
-            classMembers.unshift(constructor);
+              if (!baseConstructor) {
+                constructor = factory.createConstructorDeclaration(
+                  undefined,
+                  undefined,
+                  [],
+                  factory.createBlock([
+                    factory.createExpressionStatement(
+                      factory.createCallExpression(
+                        factory.createSuper(),
+                        undefined,
+                        undefined
+                      )
+                    ),
+                    reactiveEnhanceCallStatement
+                  ])
+                )
+              } else {
+                const newParameters = baseConstructor.parameters.map(p => (
+                  factory.createParameterDeclaration(
+                    undefined,
+                    undefined,
+                    p.dotDotDotToken,
+                    p.name,
+                    p.questionToken,
+                    p.type
+                  )
+                ))
+
+                const newArgs = baseConstructor.parameters.map(p => 
+                  p.name as Identifier
+                );
+
+                constructor = factory.createConstructorDeclaration(
+                  undefined,
+                  undefined,
+                  newParameters,
+                  factory.createBlock([
+                    factory.createExpressionStatement(
+                      factory.createCallExpression(
+                        factory.createSuper(),
+                        undefined,
+                        newArgs
+                      )
+                    ),
+                    reactiveEnhanceCallStatement
+                  ])
+                )
+              }
+
+            } else {
+              constructor = factory.createConstructorDeclaration(
+                undefined,
+                undefined,
+                [],
+                factory.createBlock([
+                  reactiveEnhanceCallStatement
+                ])
+              )
+            }
+
+            classMembers.unshift(constructor)
           } else {
             const newConstructor = factory.updateConstructorDeclaration(
               constructor,
@@ -209,15 +299,15 @@ export function transform(): TransformerFactory<SourceFile> {
                 : factory.createBlock([
                   reactiveEnhanceCallStatement
                 ])
-            );
+            )
 
-            classMembers = classMembers.map(member => isConstructorDeclaration(member) ? newConstructor : member);
+            classMembers = classMembers.map(member => isConstructorDeclaration(member) ? newConstructor : member)
           }
 
-          let newDecorators: Decorator[] | undefined = decorators?.filter(x => x) as Decorator[];
+          let newDecorators: Decorator[] | undefined = decorators?.filter(x => x) as Decorator[]
 
           if (newDecorators.length === 0) {
-            newDecorators = undefined;
+            newDecorators = undefined
           }
 
           const newClassDeclaration = factory.updateClassDeclaration(
@@ -228,17 +318,17 @@ export function transform(): TransformerFactory<SourceFile> {
             classNode.typeParameters,
             classNode.heritageClauses,
             classMembers
-          );
+          )
 
-          return newClassDeclaration;
+          return newClassDeclaration
         }
 
-        return visitEachChild(classNode, visitor, context);
-      };
+        return visitEachChild(classNode, visitor, context)
+      }
 
-      return visitNode(node, visitor);
-    };
-  };
+      return visitNode(node, visitor)
+    }
+  }
 }
 
-export default transform;
+export default transform
