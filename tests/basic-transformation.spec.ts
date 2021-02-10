@@ -46,7 +46,7 @@ test('it should enhance computed properties', () => {
   expect(isComputedProp(thing, 'length')).toBeTruthy()
 })
 
-test('it should ignore a property anotated with null', () => {
+test('it should ignore a property annotated with null', () => {
   @reactive({
     surname: null
   })
@@ -191,4 +191,76 @@ test('it should decorate overridden methods with override by default', () => {
   expect(isObservable(godzilla)).toBeTruthy()
   expect(isAction(godzilla.getAttack)).toBeTruthy()
   expect(godzilla.getAttack()).toBe('Atomic Slash')
+})
+
+test('it should decorate overridden methods with override by default, when the parent has a constructor but not the child', () => {
+  @reactive
+  class Villain {
+    constructor(readonly name: string) {
+
+    }
+
+    getPhrase() {
+      return 'Attack!'
+    }
+  }
+
+  @reactive
+  class Joker extends Villain {
+    getPhrase() {
+      return 'Why so serious?'
+    }
+  }
+
+  const villain = new Villain('Minion')
+  const joker = new Joker('Jack Napier')
+
+  expect(isObservable(villain)).toBeTruthy()
+  expect(isAction(villain.getPhrase)).toBeTruthy()
+  expect(villain.name).toBe('Minion')
+  expect(villain.getPhrase()).toBe('Attack!')
+
+  expect(isObservable(joker)).toBeTruthy()
+  expect(isAction(joker.getPhrase)).toBeTruthy()
+  expect(joker.name).toBe('Jack Napier')
+  expect(joker.getPhrase()).toBe('Why so serious?')
+})
+
+
+test('it should decorate overridden methods with override by default, when the parent has a constructor and the child too', () => {
+  @reactive
+  class Villain {
+    constructor(readonly name: string) {
+
+    }
+
+    getPhrase() {
+      return 'Attack!'
+    }
+  }
+
+  @reactive
+  class Joker extends Villain {
+    constructor(name: string) {
+      super(name)
+      console.log('New Joker in the city: ', name)
+    }
+
+    getPhrase() {
+      return 'Why so serious?'
+    }
+  }
+
+  const villain = new Villain('Minion')
+  const joker = new Joker('Jack Napier')
+
+  expect(isObservable(villain)).toBeTruthy()
+  expect(isAction(villain.getPhrase)).toBeTruthy()
+  expect(villain.name).toBe('Minion')
+  expect(villain.getPhrase()).toBe('Attack!')
+
+  expect(isObservable(joker)).toBeTruthy()
+  expect(isAction(joker.getPhrase)).toBeTruthy()
+  expect(joker.name).toBe('Jack Napier')
+  expect(joker.getPhrase()).toBe('Why so serious?')
 })
