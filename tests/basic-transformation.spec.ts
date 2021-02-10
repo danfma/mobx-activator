@@ -164,3 +164,31 @@ test('it should decorate readonly fields with observable.ref', () => {
   expect(isObservableProp(container, 'obj')).toBeTruthy()
   expect(isObservable(container.obj)).toBeFalsy()
 })
+
+
+test('it should decorate overridden methods with override by default', () => {
+  @reactive
+  class Monster {
+    getAttack() {
+      return 'Slash'
+    }
+  }
+
+  @reactive
+  class Godzilla extends Monster {
+    getAttack() {
+      return `Atomic ${super.getAttack()}`
+    }
+  }
+
+  const monster = new Monster()
+  const godzilla = new Godzilla()
+
+  expect(isObservable(monster)).toBeTruthy()
+  expect(isAction(monster.getAttack)).toBeTruthy()
+  expect(monster.getAttack()).toBe('Slash')
+
+  expect(isObservable(godzilla)).toBeTruthy()
+  expect(isAction(godzilla.getAttack)).toBeTruthy()
+  expect(godzilla.getAttack()).toBe('Atomic Slash')
+})

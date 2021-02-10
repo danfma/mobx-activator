@@ -14,34 +14,15 @@ import {
   visitNode,
   isClassDeclaration,
   AccessorDeclaration,
-  createObjectLiteral,
-  updateDecorator,
-  createCall,
-  createPropertyAssignment,
-  createArrayLiteral,
-  createStringLiteral,
-  createTrue,
-  createFalse,
-  updateClassDeclaration,
+  factory,
   isCallExpression,
   isIdentifier,
-  updateCall,
   isPropertyDeclaration,
   isConstructorDeclaration,
   isGetAccessorDeclaration,
   isMethodDeclaration,
-  Expression,
-  createConstructor,
-  createBlock,
-  createLiteral,
-  createExpressionStatement,
-  createPropertyAccess,
-  createIdentifier,
-  createThis,
-  ObjectLiteralExpression,
-  createVoidZero,
-  updateConstructor,
-  updateBlock
+  isTypeNode,
+  Expression
 } from 'typescript';
 
 export function transform(): TransformerFactory<SourceFile> {
@@ -154,24 +135,24 @@ export function transform(): TransformerFactory<SourceFile> {
 
             reactiveDecorator = decorator;
 
-            enhancementConfig = createArrayLiteral([
-              createArrayLiteral(
+            enhancementConfig = factory.createArrayLiteralExpression([
+              factory.createArrayLiteralExpression(
                 reflectionInfo.properties
                   .filter(property => !property.static)
-                  .map(property => createArrayLiteral([
-                    createStringLiteral(property.name),
-                    property.readOnly ? createTrue() : createFalse()
+                  .map(property => factory.createArrayLiteralExpression([
+                    factory.createStringLiteral(property.name),
+                    property.readOnly ? factory.createTrue() : factory.createFalse()
                   ]))
               ),
-              createArrayLiteral(
+              factory.createArrayLiteralExpression(
                 reflectionInfo.getters
                   .filter(accessor => !accessor.static)
-                  .map(getter => createStringLiteral(getter.name))
+                  .map(getter => factory.createStringLiteral(getter.name))
               ),
-              createArrayLiteral(
+              factory.createArrayLiteralExpression(
                 reflectionInfo.methods
                   .filter(method => !method.static)
-                  .map(method => createStringLiteral(method.name))
+                  .map(method => factory.createStringLiteral(method.name))
               )
             ]);
 
@@ -185,47 +166,47 @@ export function transform(): TransformerFactory<SourceFile> {
           let classMembers = classNode.members.slice();
           let constructor = classNode.members.find(x => isConstructorDeclaration(x)) as ConstructorDeclaration | undefined;
 
-          const reactiveEnhanceCallStatement = createExpressionStatement(
-            createCall(
-              createPropertyAccess(
+          const reactiveEnhanceCallStatement = factory.createExpressionStatement(
+            factory.createCallExpression(
+              factory.createPropertyAccessExpression(
                 isCallExpression(reactiveDecorator?.expression!)
                   ? reactiveDecorator?.expression.expression!
                   : reactiveDecorator?.expression!,
-                createIdentifier('enhance')
+                factory.createIdentifier('enhance')
               ),
               undefined,
               [
                 classNode.name!,
-                createThis(),
-                enhancementConfig ?? createVoidZero(),
+                factory.createThis(),
+                enhancementConfig ?? factory.createVoidZero(),
                 ...userEnhancements
               ]
             )
           );
 
           if (!constructor) {
-            constructor = createConstructor(
+            constructor = factory.createConstructorDeclaration(
               undefined,
               undefined,
               [],
-              createBlock([
+              factory.createBlock([
                 reactiveEnhanceCallStatement
               ])
             );
 
             classMembers.unshift(constructor);
           } else {
-            const newConstructor = updateConstructor(
+            const newConstructor = factory.updateConstructorDeclaration(
               constructor,
               constructor.decorators,
               constructor.modifiers,
               constructor.parameters,
               constructor.body
-                ? updateBlock(constructor.body, [
+                ? factory.updateBlock(constructor.body, [
                   ...constructor.body?.statements,
                   reactiveEnhanceCallStatement
                 ])
-                : createBlock([
+                : factory.createBlock([
                   reactiveEnhanceCallStatement
                 ])
             );
@@ -239,7 +220,7 @@ export function transform(): TransformerFactory<SourceFile> {
             newDecorators = undefined;
           }
 
-          const newClassDeclaration = updateClassDeclaration(
+          const newClassDeclaration = factory.updateClassDeclaration(
             classNode,
             newDecorators,
             classNode.modifiers,

@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "enhanced",
+    "target": "es2015",
     "plugins": [
       { "transform": "./lib/transformers/ts-transformer" }
     ]
