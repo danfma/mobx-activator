@@ -176,7 +176,7 @@ test('it should decorate overridden methods with override by default', () => {
 
   @reactive
   class Godzilla extends Monster {
-    getAttack() {
+    override getAttack() {
       return `Atomic ${super.getAttack()}`
     }
   }
@@ -207,7 +207,7 @@ test('it should decorate overridden methods with override by default, when the p
 
   @reactive
   class Joker extends Villain {
-    getPhrase() {
+    override getPhrase() {
       return 'Why so serious?'
     }
   }
@@ -246,7 +246,7 @@ test('it should decorate overridden methods with override by default, when the p
       console.log('New Joker in the city: ', name)
     }
 
-    getPhrase() {
+    override getPhrase() {
       return 'Why so serious?'
     }
   }

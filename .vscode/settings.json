@@ -1,4 +1,5 @@
 {
     "javascript.format.semicolons": "remove",
-    "typescript.format.semicolons": "remove"
+    "typescript.format.semicolons": "remove",
+    "typescript.tsdk": "node_modules/typescript/lib"
 }

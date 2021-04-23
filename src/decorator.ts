@@ -1,4 +1,4 @@
-import { makeObservable, observable, computed, action } from 'mobx';
+import { makeObservable, observable, computed, action, override } from 'mobx';
 import type { Type, AutoFactory, Members } from './interfaces';
 import { AnnotationMapEntry } from 'mobx/dist/internal';
 
@@ -47,8 +47,11 @@ reactive.enhance = function enhance<T extends object>(
     annotationsMap[accessor as keyof T] = computed;
   }
 
-  for (const method of methods) {
-    annotationsMap[method as keyof T] = autoBind ? action.bound : action;
+  for (const [method, isOverride] of methods) {
+    annotationsMap[method as keyof T] = 
+      isOverride
+        ? override
+        : autoBind ? action.bound : action;
   }
 
   Object.assign(annotationsMap, overrides);
