@@ -56,6 +56,11 @@ export function transform(): TransformerFactory<SourceFile> {
         return modifiers?.some(modifier => modifier.kind === SyntaxKind.StaticKeyword) ?? false
       }
 
+    const hasOverrideModifier =
+      (modifiers?: ModifiersArray): boolean => {
+        return modifiers?.some(modifier => modifier.kind === SyntaxKind.OverrideKeyword) ?? false;
+      };
+
     const buildReflectionInfo =
       (node: ClassDeclaration) => {
         const properties = node.members
@@ -109,7 +114,8 @@ export function transform(): TransformerFactory<SourceFile> {
 
             return {
               name: (method.name as Identifier).escapedText.toString(),
-              static: hasStaticModifier(method.modifiers)
+              static: hasStaticModifier(method.modifiers),
+              overriden: hasOverrideModifier(method.modifiers)
             }
           })
 
@@ -186,7 +192,10 @@ export function transform(): TransformerFactory<SourceFile> {
               factory.createArrayLiteralExpression(
                 reflectionInfo.methods
                   .filter(method => !method.static)
-                  .map(method => factory.createStringLiteral(method.name))
+                  .map(method => factory.createArrayLiteralExpression([
+                    factory.createStringLiteral(method.name),
+                    method.overriden ? factory.createTrue() : factory.createFalse()
+                  ]))
               )
             ])
 

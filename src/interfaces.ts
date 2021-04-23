@@ -13,10 +13,15 @@ export type PropertyInfo = [
   /* readOnly */ boolean
 ];
 
+export type MethodInfo = [
+  /* name */ string,
+  /* override */ boolean
+];
+
 export type Members = [
   /* properties */ Array<PropertyInfo>,
   /* accessors */ Array<string>,
-  /* methods */ Array<string>
+  /* methods */ Array<MethodInfo>
 ];
 
 export type AutoFactory<T> = (target: T) => void;
